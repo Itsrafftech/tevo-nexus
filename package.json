@@ -1,0 +1,14 @@
+{
+  "name": "tevo-nexus",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:nexus": "npm run dev --workspace=nexus",
+    "build:nexus": "npm run build --workspace=nexus",
+    "lint:nexus": "npm run lint --workspace=nexus"
+  }
+}
