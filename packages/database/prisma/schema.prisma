@@ -16,6 +16,21 @@ enum UnitType {
   @@schema("core")
 }
 
+enum OrganizationalPosition {
+  KETUA_ORGANISASI
+  WAKIL_KETUA_ORGANISASI
+  SEKRETARIS_INTERNAL
+  SEKRETARIS_EKSTERNAL
+  BENDAHARA_INTERNAL
+  BENDAHARA_EKSTERNAL
+  KETUA_BIRDEP
+  SEKRETARIS_BIRDEP
+  BENDAHARA_BIRDEP
+  ANGGOTA_BIRDEP
+
+  @@schema("core")
+}
+
 model CabinetPeriod {
   id        String   @id @default(uuid())
   name      String
@@ -26,7 +41,8 @@ model CabinetPeriod {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  birdeps Birdep[]
+  birdeps     Birdep[]
+  memberships Membership[]
 
   @@schema("core")
 }
@@ -45,8 +61,45 @@ model Birdep {
   updatedAt       DateTime @updatedAt
 
   cabinetPeriod CabinetPeriod @relation(fields: [cabinetPeriodId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  memberships   Membership[]
 
   @@unique([cabinetPeriodId, code])
   @@unique([cabinetPeriodId, slug])
+  @@schema("core")
+}
+
+model Member {
+  id        String   @id @default(uuid())
+  fullName  String
+  nim       String   @unique
+  instagram String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships Membership[]
+
+  @@schema("core")
+}
+
+model Membership {
+  id                     String                 @id @default(uuid())
+  memberId               String
+  cabinetPeriodId        String
+  primaryBirdepId        String
+  organizationalPosition OrganizationalPosition
+  internalTitle          String?
+  subdivision            String?
+  programRoles           String?                @db.Text
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  member        Member        @relation(fields: [memberId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  cabinetPeriod CabinetPeriod @relation(fields: [cabinetPeriodId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  primaryBirdep Birdep        @relation(fields: [primaryBirdepId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([memberId, cabinetPeriodId])
+  @@index([cabinetPeriodId])
+  @@index([primaryBirdepId])
   @@schema("core")
 }
