@@ -3,6 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./importers": "./src/importers/validators.ts",
+    "./permissions": "./src/permissions.ts"
+  },
   "scripts": {
     "db:format": "prisma format",
     "db:validate": "prisma validate",

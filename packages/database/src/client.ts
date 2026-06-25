@@ -1,15 +1,8 @@
-import "dotenv/config";
-
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.js";
+import { requireDatabaseUrl } from "./env.js";
 
-const connectionString = process.env.DATABASE_URL;
-
-if (!connectionString) {
-  throw new Error(
-    "DATABASE_URL belum dikonfigurasi. Pastikan file packages/database/.env tersedia.",
-  );
-}
+const connectionString = requireDatabaseUrl();
 
 const adapter = new PrismaPg({
   connectionString,

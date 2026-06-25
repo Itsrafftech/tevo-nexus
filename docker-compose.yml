@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tevo-nexus-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tevo_nexus
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  directus:
+    image: directus/directus:11
+    container_name: tevo-nexus-directus
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    ports:
+      - "8055:8055"
+    environment:
+      KEY: ${DIRECTUS_KEY}
+      SECRET: ${DIRECTUS_SECRET}
+      ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
+      DB_CLIENT: "pg"
+      DB_HOST: "postgres"
+      DB_PORT: "5432"
+      DB_DATABASE: "tevo_nexus"
+      DB_USER: "postgres"
+      DB_PASSWORD: "postgres"
+      PUBLIC_URL: ${DIRECTUS_URL}
+    volumes:
+      - directus_uploads:/directus/uploads
+
+volumes:
+  postgres_data:
+  directus_uploads:

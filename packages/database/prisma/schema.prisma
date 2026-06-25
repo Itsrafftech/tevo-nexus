@@ -31,6 +31,61 @@ enum OrganizationalPosition {
   @@schema("core")
 }
 
+enum MediaOwnerType {
+  MEMBER_PHOTO
+  PROGRAM_COVER
+  NEWS_IMAGE
+  CMS_MEDIA
+
+  @@schema("core")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  BPH
+  TEVO_ADMIN
+  KETUA_BIRDEP
+  SEKRETARIS_BIRDEP
+  BENDAHARA_BIRDEP
+  ANGGOTA_BIRDEP
+
+  @@schema("nexus")
+}
+
+enum PermissionOverrideEffect {
+  GRANT
+  REVOKE
+
+  @@schema("nexus")
+}
+
+enum ProgramStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+
+  @@schema("nexus")
+}
+
+enum PressReleaseSourceType {
+  GOOGLE_DOCS
+  URL
+  INTERNAL_ARTICLE
+
+  @@schema("nexus")
+}
+
+enum PublishStatus {
+  DRAFT
+  IN_REVIEW
+  PUBLISHED
+  REJECTED
+  ARCHIVED
+
+  @@schema("tevo")
+}
+
 model CabinetPeriod {
   id        String   @id @default(uuid())
   name      String
@@ -43,41 +98,55 @@ model CabinetPeriod {
 
   birdeps     Birdep[]
   memberships Membership[]
+  programs    ProgramWork[]
 
   @@schema("core")
 }
 
 model Birdep {
-  id              String   @id @default(uuid())
+  id              String    @id @default(uuid())
   cabinetPeriodId String
   name            String
   code            String
   slug            String
   unitType        UnitType
-  description     String   @db.Text
-  focusArea       String   @db.Text
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  description     String    @db.Text
+  focusArea       String    @db.Text
+  isActive        Boolean   @default(true)
+  archivedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  cabinetPeriod CabinetPeriod @relation(fields: [cabinetPeriodId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  memberships   Membership[]
+  cabinetPeriod        CabinetPeriod            @relation(fields: [cabinetPeriodId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  memberships          Membership[]
+  users                User[]
+  primaryPrograms      ProgramWork[]            @relation("PrimaryProgramBirdep")
+  programCollaborators ProgramCollaborator[]
+  publicProfile        TevoPublicBirdepProfile?
 
   @@unique([cabinetPeriodId, code])
   @@unique([cabinetPeriodId, slug])
+  @@index([unitType])
   @@schema("core")
 }
 
 model Member {
-  id        String   @id @default(uuid())
-  fullName  String
-  nim       String   @unique
-  instagram String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String    @id @default(uuid())
+  fullName     String
+  nim          String    @unique
+  instagram    String?
+  publicBio    String?   @db.Text
+  photoAssetId String?
+  isActive     Boolean   @default(true)
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  memberships Membership[]
+  photoAsset    MediaAsset?              @relation("MemberPhoto", fields: [photoAssetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  memberships   Membership[]
+  user          User?
+  programPics   ProgramPic[]
+  publicProfile TevoPublicMemberProfile?
 
   @@schema("core")
 }
@@ -89,6 +158,7 @@ model Membership {
   primaryBirdepId        String
   organizationalPosition OrganizationalPosition
   internalTitle          String?
+  publicTitle            String?
   subdivision            String?
   programRoles           String?                @db.Text
   createdAt              DateTime               @default(now())
@@ -102,4 +172,580 @@ model Membership {
   @@index([cabinetPeriodId])
   @@index([primaryBirdepId])
   @@schema("core")
+}
+
+model MediaAsset {
+  id           String         @id @default(uuid())
+  ownerType    MediaOwnerType
+  ownerId      String?
+  fileName     String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  storagePath  String
+  publicUrl    String
+  altText      String?
+  uploadedById String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  uploadedBy    User?             @relation("UploadedMedia", fields: [uploadedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  memberPhotos  Member[]          @relation("MemberPhoto")
+  programCovers ProgramWork[]     @relation("ProgramCover")
+  newsImages    TevoNewsArticle[] @relation("NewsImage")
+
+  @@index([ownerType, ownerId])
+  @@schema("core")
+}
+
+model User {
+  id                         String    @id @default(uuid())
+  email                      String    @unique
+  name                       String
+  passwordHash               String
+  temporaryPasswordExpiresAt DateTime?
+  mustChangePassword         Boolean   @default(true)
+  isActive                   Boolean   @default(true)
+  archivedAt                 DateTime?
+  memberId                   String?   @unique
+  primaryBirdepId            String?
+  lastLoginAt                DateTime?
+  failedLoginCount           Int       @default(0)
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  member              Member?                  @relation(fields: [memberId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  primaryBirdep       Birdep?                  @relation(fields: [primaryBirdepId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  roles               RoleAssignment[]
+  permissionOverrides UserPermissionOverride[]
+  createdPrograms     ProgramWork[]            @relation("ProgramCreatedBy")
+  updatedPrograms     ProgramWork[]            @relation("ProgramUpdatedBy")
+  progressUpdates     ProgramProgressUpdate[]
+  issues              ProgramIssue[]
+  followUps           ProgramFollowUp[]
+  pressReleases       PressRelease[]
+  importBatches       ImportBatch[]
+  auditLogs           AuditLog[]               @relation("AuditActor")
+  uploadedMedia       MediaAsset[]             @relation("UploadedMedia")
+  submittedApprovals  TevoApprovalRequest[]    @relation("ApprovalSubmittedBy")
+  reviewedApprovals   TevoApprovalRequest[]    @relation("ApprovalReviewer")
+
+  @@index([primaryBirdepId])
+  @@schema("nexus")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  code        UserRole @unique
+  name        String
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignments RoleAssignment[]
+  permissions RolePermission[]
+
+  @@schema("nexus")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  group       String
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roles     RolePermission[]
+  overrides UserPermissionOverride[]
+
+  @@index([group])
+  @@schema("nexus")
+}
+
+model RoleAssignment {
+  id        String   @id @default(uuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([userId, roleId])
+  @@schema("nexus")
+}
+
+model RolePermission {
+  id           String   @id @default(uuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@schema("nexus")
+}
+
+model UserPermissionOverride {
+  id           String                   @id @default(uuid())
+  userId       String
+  permissionId String
+  effect       PermissionOverrideEffect
+  reason       String?                  @db.Text
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([userId, permissionId])
+  @@schema("nexus")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String?
+  action      String
+  entityType  String
+  entityId    String?
+  before      Json?
+  after       Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([actorUserId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@schema("nexus")
+}
+
+model ProgramWork {
+  id                  String        @id @default(uuid())
+  cabinetPeriodId     String
+  primaryBirdepId     String
+  name                String
+  slug                String
+  internalDescription String        @db.Text
+  publicDescription   String?       @db.Text
+  status              ProgramStatus @default(NOT_STARTED)
+  progressPercent     Int           @default(0)
+  startDate           DateTime?     @db.Date
+  endDate             DateTime?     @db.Date
+  coverImageId        String?
+  pressReleaseId      String?       @unique
+  createdById         String?
+  updatedById         String?
+  archivedAt          DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  cabinetPeriod CabinetPeriod           @relation(fields: [cabinetPeriodId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  primaryBirdep Birdep                  @relation("PrimaryProgramBirdep", fields: [primaryBirdepId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  coverImage    MediaAsset?             @relation("ProgramCover", fields: [coverImageId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  pressRelease  PressRelease?           @relation("ProgramPressRelease")
+  createdBy     User?                   @relation("ProgramCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  updatedBy     User?                   @relation("ProgramUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  collaborators ProgramCollaborator[]
+  pics          ProgramPic[]
+  updates       ProgramProgressUpdate[]
+  issues        ProgramIssue[]
+  followUps     ProgramFollowUp[]
+  publicProgram TevoPublicProgramWork?
+
+  @@unique([cabinetPeriodId, slug])
+  @@index([primaryBirdepId])
+  @@index([status])
+  @@schema("nexus")
+}
+
+model ProgramCollaborator {
+  id        String   @id @default(uuid())
+  programId String
+  birdepId  String
+  createdAt DateTime @default(now())
+
+  program ProgramWork @relation(fields: [programId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  birdep  Birdep      @relation(fields: [birdepId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([programId, birdepId])
+  @@schema("nexus")
+}
+
+model ProgramPic {
+  id        String   @id @default(uuid())
+  programId String
+  memberId  String
+  title     String?
+  createdAt DateTime @default(now())
+
+  program ProgramWork @relation(fields: [programId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  member  Member      @relation(fields: [memberId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([programId, memberId])
+  @@schema("nexus")
+}
+
+model ProgramProgressUpdate {
+  id               String   @id @default(uuid())
+  programId        String
+  progressPercent  Int
+  updateText       String   @db.Text
+  internalIssue    String?  @db.Text
+  internalFollowUp String?  @db.Text
+  createdById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  program   ProgramWork @relation(fields: [programId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  createdBy User?       @relation(fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([programId, createdAt])
+  @@schema("nexus")
+}
+
+model ProgramIssue {
+  id          String   @id @default(uuid())
+  programId   String
+  description String   @db.Text
+  isResolved  Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  program   ProgramWork @relation(fields: [programId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  createdBy User?       @relation(fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([programId])
+  @@schema("nexus")
+}
+
+model ProgramFollowUp {
+  id          String    @id @default(uuid())
+  programId   String
+  description String    @db.Text
+  dueDate     DateTime? @db.Date
+  completedAt DateTime?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  program   ProgramWork @relation(fields: [programId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  createdBy User?       @relation(fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([programId])
+  @@schema("nexus")
+}
+
+model PressRelease {
+  id          String                 @id @default(uuid())
+  programId   String                 @unique
+  title       String
+  sourceType  PressReleaseSourceType
+  url         String?
+  publishedAt DateTime?
+  status      PublishStatus          @default(DRAFT)
+  createdById String?
+  archivedAt  DateTime?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  program   ProgramWork @relation("ProgramPressRelease", fields: [programId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  createdBy User?       @relation(fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([status])
+  @@schema("nexus")
+}
+
+model ImportBatch {
+  id          String    @id @default(uuid())
+  type        String
+  fileName    String?
+  dryRun      Boolean   @default(true)
+  status      String
+  summary     Json?
+  createdById String?
+  committedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  createdBy User?            @relation(fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  rows      ImportBatchRow[]
+
+  @@index([type, status])
+  @@schema("nexus")
+}
+
+model ImportBatchRow {
+  id             String   @id @default(uuid())
+  batchId        String
+  rowNumber      Int
+  rawData        Json
+  normalizedData Json?
+  errors         Json?
+  isValid        Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  batch ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([batchId, rowNumber])
+  @@schema("nexus")
+}
+
+model TevoSiteSetting {
+  id          String        @id @default(uuid())
+  key         String        @unique
+  value       Json
+  status      PublishStatus @default(DRAFT)
+  submittedBy String?
+  reviewerId  String?
+  reviewedAt  DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status])
+  @@schema("tevo")
+}
+
+model TevoLandingSection {
+  id          String        @id @default(uuid())
+  slug        String        @unique
+  title       String
+  content     Json
+  sortOrder   Int           @default(0)
+  status      PublishStatus @default(DRAFT)
+  submittedBy String?
+  reviewerId  String?
+  reviewedAt  DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status, sortOrder])
+  @@schema("tevo")
+}
+
+model TevoOrganizationProfile {
+  id          String        @id @default(uuid())
+  slug        String        @unique
+  title       String
+  body        String        @db.Text
+  status      PublishStatus @default(DRAFT)
+  submittedBy String?
+  reviewerId  String?
+  reviewedAt  DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status])
+  @@schema("tevo")
+}
+
+model TevoVisionMission {
+  id          String        @id @default(uuid())
+  vision      String        @db.Text
+  missions    Json
+  status      PublishStatus @default(DRAFT)
+  submittedBy String?
+  reviewerId  String?
+  reviewedAt  DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status])
+  @@schema("tevo")
+}
+
+model TevoStructureContent {
+  id          String        @id @default(uuid())
+  title       String
+  content     Json
+  status      PublishStatus @default(DRAFT)
+  submittedBy String?
+  reviewerId  String?
+  reviewedAt  DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status])
+  @@schema("tevo")
+}
+
+model TevoPublicMemberProfile {
+  id          String        @id @default(uuid())
+  memberId    String        @unique
+  displayName String
+  publicTitle String?
+  instagram   String?
+  bio         String?       @db.Text
+  status      PublishStatus @default(DRAFT)
+  submittedBy String?
+  reviewerId  String?
+  reviewedAt  DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([status])
+  @@schema("tevo")
+}
+
+model TevoPublicBirdepProfile {
+  id          String        @id @default(uuid())
+  birdepId    String        @unique
+  displayName String
+  summary     String        @db.Text
+  focusAreas  Json?
+  status      PublishStatus @default(DRAFT)
+  submittedBy String?
+  reviewerId  String?
+  reviewedAt  DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  birdep Birdep @relation(fields: [birdepId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([status])
+  @@schema("tevo")
+}
+
+model TevoPublicProgramWork {
+  id          String        @id @default(uuid())
+  programId   String        @unique
+  title       String
+  slug        String        @unique
+  summary     String        @db.Text
+  statusLabel String?
+  status      PublishStatus @default(DRAFT)
+  submittedBy String?
+  reviewerId  String?
+  reviewedAt  DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  program ProgramWork @relation(fields: [programId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([status])
+  @@schema("tevo")
+}
+
+model TevoNewsArticle {
+  id          String        @id @default(uuid())
+  slug        String        @unique
+  title       String
+  excerpt     String?
+  body        String        @db.Text
+  imageId     String?
+  status      PublishStatus @default(DRAFT)
+  submittedBy String?
+  reviewerId  String?
+  reviewedAt  DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  image MediaAsset? @relation("NewsImage", fields: [imageId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([status, publishedAt])
+  @@schema("tevo")
+}
+
+model TevoStorePreview {
+  id          String        @id @default(uuid())
+  title       String
+  content     Json
+  status      PublishStatus @default(DRAFT)
+  submittedBy String?
+  reviewerId  String?
+  reviewedAt  DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status])
+  @@schema("tevo")
+}
+
+model TevoAngkasaCareContent {
+  id          String        @id @default(uuid())
+  slug        String        @unique
+  title       String
+  body        String        @db.Text
+  status      PublishStatus @default(DRAFT)
+  submittedBy String?
+  reviewerId  String?
+  reviewedAt  DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status])
+  @@schema("tevo")
+}
+
+model TevoNavigationItem {
+  id          String        @id @default(uuid())
+  label       String
+  href        String
+  sortOrder   Int           @default(0)
+  status      PublishStatus @default(DRAFT)
+  submittedBy String?
+  reviewerId  String?
+  reviewedAt  DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status, sortOrder])
+  @@schema("tevo")
+}
+
+model TevoFooterContent {
+  id          String        @id @default(uuid())
+  slug        String        @unique
+  content     Json
+  status      PublishStatus @default(DRAFT)
+  submittedBy String?
+  reviewerId  String?
+  reviewedAt  DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status])
+  @@schema("tevo")
+}
+
+model TevoApprovalRequest {
+  id            String        @id @default(uuid())
+  contentType   String
+  contentId     String
+  status        PublishStatus @default(IN_REVIEW)
+  note          String?       @db.Text
+  submittedById String?
+  reviewerId    String?
+  reviewedAt    DateTime?
+  publishedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  submittedBy User? @relation("ApprovalSubmittedBy", fields: [submittedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reviewer    User? @relation("ApprovalReviewer", fields: [reviewerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([contentType, contentId])
+  @@index([status])
+  @@schema("tevo")
 }
