@@ -42,7 +42,10 @@ enum MediaOwnerType {
 
 enum UserRole {
   SUPER_ADMIN
+  ADMIN
   BPH
+  KSATRIA
+  LAKSANA
   TEVO_ADMIN
   KETUA_BIRDEP
   SEKRETARIS_BIRDEP

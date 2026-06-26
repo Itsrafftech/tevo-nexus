@@ -38,3 +38,14 @@ export const progressUpdateSchema = z.object({
   internalIssue: z.string().optional(),
   internalFollowUp: z.string().optional(),
 });
+
+export const programIssueSchema = z.object({
+  description: z.string().min(1),
+  isResolved: z.boolean().optional(),
+});
+
+export const programFollowUpSchema = z.object({
+  description: z.string().min(1),
+  dueDate: z.string().date().optional(),
+  completedAt: z.string().datetime().optional(),
+});

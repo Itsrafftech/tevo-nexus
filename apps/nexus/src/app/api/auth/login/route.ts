@@ -31,6 +31,20 @@ export async function POST(request: Request) {
     return fail("UNAUTHORIZED", "Email atau password salah.", 401);
   }
 
+  if (
+    user.mustChangePassword &&
+    user.temporaryPasswordExpiresAt &&
+    user.temporaryPasswordExpiresAt < new Date()
+  ) {
+    await writeAuditLog({
+      actorUserId: user.id,
+      action: "auth.temporary_password_expired",
+      entityType: "User",
+      entityId: user.id,
+    });
+    return fail("UNAUTHORIZED", "Temporary password sudah kedaluwarsa.", 401);
+  }
+
   const updatedUser = await prisma.user.update({
     where: { id: user.id },
     data: {
@@ -41,6 +55,12 @@ export async function POST(request: Request) {
 
   const session = await buildSession(updatedUser);
   await setSession(session);
+  await writeAuditLog({
+    actorUserId: updatedUser.id,
+    action: "auth.login_success",
+    entityType: "User",
+    entityId: updatedUser.id,
+  });
 
   return ok({
     userId: session.userId,

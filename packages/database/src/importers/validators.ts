@@ -1,4 +1,22 @@
-const validProgramStatuses = new Set(["Completed", "In progress", "Not started"]);
+const validProgramStatuses = new Set([
+  "Completed",
+  "In progress",
+  "In Progress",
+  "Not started",
+  "Not Started",
+]);
+const validFormalPositions = new Set([
+  "Ketua",
+  "Wakil Ketua",
+  "Sekretaris Internal",
+  "Sekretaris Eksternal",
+  "Bendahara Internal",
+  "Bendahara Eksternal",
+  "Ksatria I",
+  "Ksatria II",
+  "Ksatria III",
+  "Laksana",
+]);
 
 export type ImportValidationResult = {
   rowNumber: number;
@@ -49,10 +67,15 @@ export function validateMemberRows(rows: ReturnType<typeof parseCsv>) {
     const errors: string[] = [];
     if (!data["nama lengkap"]) errors.push("nama lengkap wajib diisi");
     if (!data.NIM) errors.push("NIM wajib diisi");
+    const formalPosition = data["jabatan formal"] || data["Jabatan Formal"] || "";
+    const subdivision = data.subdivisi || data.Subdivisi || "";
     if (data.Instagram && !data.Instagram.startsWith("@")) {
       errors.push("Instagram harus diawali @");
     }
-    if (data["jabatan formal"] !== "Laksana" && data.subdivisi) {
+    if (!validFormalPositions.has(formalPosition)) {
+      errors.push("jabatan formal tidak valid");
+    }
+    if (formalPosition !== "Laksana" && subdivision) {
       errors.push("subdivisi hanya diisi untuk jabatan formal Laksana");
     }
 
@@ -62,11 +85,11 @@ export function validateMemberRows(rows: ReturnType<typeof parseCsv>) {
       normalizedData: {
         fullName: data["nama lengkap"] ?? "",
         nim: data.NIM ?? "",
-        formalPosition: data["jabatan formal"] ?? "",
-        subdivision: data.subdivisi || null,
+        formalPosition,
+        subdivision: subdivision || null,
         programRole: data["jabatan di proker"] || null,
         instagram: data.Instagram || null,
-        birdep: data.Birdept ?? "",
+        birdep: data.Birdept || data.Birdep || data["Birdept asal"] || "",
       },
       errors,
     } satisfies ImportValidationResult;
@@ -84,6 +107,8 @@ export function validatePressReleaseRows(rows: ReturnType<typeof parseCsv>) {
     if (!date) errors.push("tanggal harus format DD/MM/YYYY");
     if (!isValidUrl(data["link press release"])) {
       errors.push("link press release harus URL valid");
+    } else if (!new URL(data["link press release"]).hostname.includes("google")) {
+      errors.push("link press release harus URL Google Docs publik");
     }
 
     return {
@@ -95,7 +120,7 @@ export function validatePressReleaseRows(rows: ReturnType<typeof parseCsv>) {
           .split(/[;&]/)
           .map((item) => item.trim())
           .filter(Boolean),
-        status: data["status proker"] ?? "",
+        status: normalizeProgramStatus(data["status proker"] ?? ""),
         date,
         url: data["link press release"] ?? "",
       },
@@ -118,4 +143,11 @@ function isValidUrl(value: string) {
   } catch {
     return false;
   }
+}
+
+function normalizeProgramStatus(value: string) {
+  if (/completed/i.test(value)) return "COMPLETED";
+  if (/in progress/i.test(value)) return "IN_PROGRESS";
+  if (/not started/i.test(value)) return "NOT_STARTED";
+  return value;
 }

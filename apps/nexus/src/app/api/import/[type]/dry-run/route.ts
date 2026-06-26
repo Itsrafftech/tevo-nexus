@@ -10,6 +10,9 @@ const allowedTypes = new Set(["members", "birdeps", "press-releases"]);
 
 export async function POST(request: Request, { params }: Params) {
   const session = await requireAuth();
+  if (!session.permissions.includes("import.manage")) {
+    return fail("FORBIDDEN", "Tidak punya akses import data.", 403);
+  }
   const { type } = await params;
   if (!allowedTypes.has(type)) {
     return fail("BAD_REQUEST", "Tipe import tidak didukung.", 400);

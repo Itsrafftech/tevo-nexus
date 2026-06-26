@@ -2,22 +2,38 @@ import { prisma } from "@orma/database";
 import { fail, ok, paginationParams } from "@/lib/api-response";
 import { requireAuth } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { serializeProgramForSession } from "@/lib/program-serializer";
 import { programSchema } from "@/lib/validations/core";
 
 export async function GET(request: Request) {
-  await requireAuth();
+  const session = await requireAuth();
   const pagination = paginationParams(new URL(request.url).searchParams);
   const [items, total] = await Promise.all([
     prisma.programWork.findMany({
       where: { archivedAt: null },
-      include: { primaryBirdep: true, collaborators: { include: { birdep: true } } },
+      include: {
+        primaryBirdep: true,
+        collaborators: { include: { birdep: true } },
+        updates: { orderBy: { createdAt: "desc" } },
+        issues: true,
+        followUps: true,
+        pressRelease: true,
+        coverImage: true,
+        createdBy: { select: { id: true, name: true } },
+        updatedBy: { select: { id: true, name: true } },
+      },
       skip: pagination.skip,
       take: pagination.take,
       orderBy: { updatedAt: "desc" },
     }),
     prisma.programWork.count({ where: { archivedAt: null } }),
   ]);
-  return ok({ items, total, page: pagination.page, pageSize: pagination.pageSize });
+  return ok({
+    items: items.map((program) => serializeProgramForSession(program, session)),
+    total,
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+  });
 }
 
 export async function POST(request: Request) {

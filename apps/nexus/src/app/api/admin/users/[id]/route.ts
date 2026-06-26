@@ -6,6 +6,33 @@ import { updateUserSchema } from "@/lib/validations/admin";
 
 type Params = { params: Promise<{ id: string }> };
 
+export async function GET(_request: Request, { params }: Params) {
+  await requirePermission("user.read");
+  const { id } = await params;
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      isActive: true,
+      archivedAt: true,
+      mustChangePassword: true,
+      temporaryPasswordExpiresAt: true,
+      primaryBirdepId: true,
+      memberId: true,
+      lastLoginAt: true,
+      failedLoginCount: true,
+      createdAt: true,
+      updatedAt: true,
+      roles: { include: { role: true } },
+      permissionOverrides: { include: { permission: true } },
+    },
+  });
+
+  return user ? ok(user) : fail("NOT_FOUND", "User tidak ditemukan.", 404);
+}
+
 export async function PATCH(request: Request, { params }: Params) {
   const session = await requirePermission("user.update");
   const { id } = await params;
